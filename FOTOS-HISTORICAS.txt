@@ -1,0 +1,27 @@
+25 fotografias históricas integradas em public/images/historia.
+Arquivos de origem na ordem:
+01 - 20150606-0006.jpeg
+02 - 20151010-0002.jpeg
+03 - ANA 5ORDENAÇÃO.jpg.jpeg
+04 - ANIVERSÁRIO 2010-3.jpg.jpeg
+05 - ANIVERSÁRIO 2010-7.jpg.jpeg
+06 - ANIVERSÁRIO 2010.jpg.jpeg
+07 - CRUZ DAS ARMAS 2.JPG.jpeg
+08 - CRUZ DAS ARMAS.JPG.jpeg
+09 - FALTA.jpg.jpeg
+10 - FOTO 10 SAPÉ.jpg.jpeg
+11 - FOTO 11.jpg.jpeg
+12 - FOTO 2009 JAILSON.jpg.jpeg
+13 - FOTO 2009.1.jpg.jpeg
+14 - FOTO 2009.4.jpg.jpeg
+15 - FOTO 2009.5.jpg.jpeg
+16 - FOTO 2010-2.jpg.jpeg
+17 - FOTO 2010-20 (2).jpg.jpeg
+18 - FOTO 2010.jpg.jpeg
+19 - FOTO 2012-2.jpg.jpeg
+20 - FOTO 7.jpg.jpeg
+21 - NOVA 2009.jpg.jpeg
+22 - Normando0208.jpg.jpeg
+23 - Normando0211.jpg.jpeg
+24 - PRIMEICA CONSAGRAÇÃO.JPG.jpeg
+25 - foto0119.jpg.jpeg
