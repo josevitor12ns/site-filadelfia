@@ -14,12 +14,18 @@ export type ChannelFeedResult = {
 
 function decodeXml(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
-      String.fromCodePoint(parseInt(hex, 16))
-    )
-    .replace(/&#(\d+);/g, (_, decimal: string) =>
-      String.fromCodePoint(parseInt(decimal, 10))
-    )
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => {
+      const code = parseInt(hex, 16);
+      return code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    })
+    .replace(/&#(\d+);/g, (_, decimal: string) => {
+      const code = parseInt(decimal, 10);
+      return code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    })
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
@@ -29,12 +35,16 @@ function decodeXml(value: string): string {
 }
 
 function extractTag(xml: string, tag: string): string {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = xml.match(
-    new RegExp(`<${escaped}>([\\s\\S]*?)<\\/${escaped}>`)
+  const escaped = tag.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
   );
 
-  return match?.[1]?.trim() ?? "";
+  const expression = new RegExp(
+    `<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}>`
+  );
+
+  return xml.match(expression)?.[1]?.trim() ?? "";
 }
 
 export const getChannelFeed = createServerFn({
@@ -51,92 +61,107 @@ export const getChannelFeed = createServerFn({
 
     return { channelId };
   })
-  .handler(async ({ data }): Promise<ChannelFeedResult> => {
-    try {
-      const url = new URL(
-        "https://www.youtube.com/feeds/videos.xml"
-      );
+  .handler(
+    async ({ data }): Promise<ChannelFeedResult> => {
+      try {
+        const url = new URL(
+          "https://www.youtube.com/feeds/videos.xml"
+        );
 
-      url.searchParams.set("channel_id", data.channelId);
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/atom+xml, application/xml, text/xml",
-          "User-Agent": "Mozilla/5.0",
-        },
-        signal: AbortSignal.timeout(12000),
-      });
-
-      if (!response.ok) {
-        console.error(
-          "[YouTube RSS] Erro HTTP:",
-          response.status,
+        url.searchParams.set(
+          "channel_id",
           data.channelId
         );
 
-        return {
-          videos: [],
-          unavailable: true,
-        };
-      }
+        const response = await fetch(url.toString(), {
+          headers: {
+            Accept:
+              "application/atom+xml, application/xml, text/xml",
+            "User-Agent": "Mozilla/5.0",
+          },
+          signal: AbortSignal.timeout(12000),
+        });
 
-      const xml = await response.text();
-
-      if (!xml.includes("<feed") || !xml.includes("</feed>")) {
-        console.error(
-          "[YouTube RSS] Resposta XML inválida."
-        );
-
-        return {
-          videos: [],
-          unavailable: true,
-        };
-      }
-
-      const entries = xml
-        .split(/<entry(?:\s[^>]*)?>/)
-        .slice(1);
-
-      const videos: FeedVideo[] = entries
-        .map((entry) => {
-          const youtube_id = extractTag(
-            entry,
-            "yt:videoId"
-          );
-
-          const title = decodeXml(
-            extractTag(entry, "title")
-          );
-
-          const published_at = extractTag(
-            entry,
-            "published"
+        if (!response.ok) {
+          console.error(
+            "[YouTube RSS] Erro HTTP:",
+            response.status,
+            data.channelId
           );
 
           return {
-            youtube_id,
-            title: title || "Vídeo da igreja",
-            published_at:
-              published_at || new Date().toISOString(),
+            videos: [],
+            unavailable: true,
           };
-        })
-        .filter((video) =>
-          /^[\w-]{11}$/.test(video.youtube_id)
+        }
+
+        const xml = await response.text();
+
+        if (
+          !xml.includes("<feed") ||
+          !xml.includes("</feed>")
+        ) {
+          console.error(
+            "[YouTube RSS] Resposta XML inválida."
+          );
+
+          return {
+            videos: [],
+            unavailable: true,
+          };
+        }
+
+        const entries = xml
+          .split(/<entry(?:\s[^>]*)?>/)
+          .slice(1);
+
+        const videos: FeedVideo[] = entries
+          .map((entry) => {
+            const youtube_id = extractTag(
+              entry,
+              "yt:videoId"
+            );
+
+            const title = decodeXml(
+              extractTag(entry, "title")
+            );
+
+            const published_at = extractTag(
+              entry,
+              "published"
+            );
+
+            return {
+              youtube_id,
+              title: title || "Vídeo da igreja",
+              published_at:
+                published_at ||
+                new Date().toISOString(),
+            };
+          })
+          .filter((video) =>
+            /^[\w-]{11}$/.test(video.youtube_id)
+          );
+
+        console.info(
+          "[YouTube RSS] Vídeos encontrados:",
+          videos.length
         );
 
-      return {
-        videos,
-        unavailable: false,
-      };
-    } catch (error) {
-      console.error(
-        "[YouTube RSS] Falha ao consultar canal:",
-        error
-      );
+        return {
+          videos,
+          unavailable: false,
+        };
+      } catch (error) {
+        console.error(
+          "[YouTube RSS] Falha ao consultar canal:",
+          error
+        );
 
-      return {
-        videos: [],
-        unavailable: true,
-      };
+        return {
+          videos: [],
+          unavailable: true,
+        };
+      }
     }
-  });
+  );
