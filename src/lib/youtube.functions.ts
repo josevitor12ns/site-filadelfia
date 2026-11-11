@@ -12,20 +12,27 @@ export type ChannelFeedResult = {
   unavailable: boolean;
 };
 
+type YouTubeItem = {
+  snippet?: {
+    title?: string;
+    publishedAt?: string;
+    resourceId?: {
+      videoId?: string;
+    };
+  };
+};
+
+const VIDEO_ID = /^[a-zA-Z0-9_-]{11}$/;
+const CHANNEL_ID = /^UC[a-zA-Z0-9_-]{22}$/;
+
 function decodeXml(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => {
-      const code = parseInt(hex, 16);
-      return code <= 0x10ffff
-        ? String.fromCodePoint(code)
-        : "";
-    })
-    .replace(/&#(\d+);/g, (_, decimal: string) => {
-      const code = parseInt(decimal, 10);
-      return code <= 0x10ffff
-        ? String.fromCodePoint(code)
-        : "";
-    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
+      String.fromCodePoint(parseInt(hex, 16))
+    )
+    .replace(/&#(\d+);/g, (_, number: string) =>
+      String.fromCodePoint(parseInt(number, 10))
+    )
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
@@ -40,11 +47,109 @@ function extractTag(xml: string, tag: string): string {
     "\\$&"
   );
 
-  const expression = new RegExp(
-    `<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}>`
+  const match = xml.match(
+    new RegExp(
+      `<${escaped}>([\\s\\S]*?)<\\/${escaped}>`
+    )
   );
 
-  return xml.match(expression)?.[1]?.trim() ?? "";
+  return match?.[1]?.trim() ?? "";
+}
+
+async function fetchRss(
+  channelId: string
+): Promise<FeedVideo[] | null> {
+  const url = new URL(
+    "https://www.youtube.com/feeds/videos.xml"
+  );
+
+  url.searchParams.set("channel_id", channelId);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/atom+xml, application/xml",
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    console.warn(
+      "[YouTube RSS] HTTP",
+      response.status
+    );
+
+    return null;
+  }
+
+  const xml = await response.text();
+
+  if (!xml.includes("<feed")) {
+    return null;
+  }
+
+  return xml
+    .split(/<entry(?:\s[^>]*)?>/)
+    .slice(1)
+    .map((entry) => ({
+      youtube_id: extractTag(entry, "yt:videoId"),
+      title:
+        decodeXml(extractTag(entry, "title")) ||
+        "Vídeo da igreja",
+      published_at: extractTag(entry, "published"),
+    }))
+    .filter((video) =>
+      VIDEO_ID.test(video.youtube_id)
+    );
+}
+
+async function fetchApi(
+  channelId: string,
+  apiKey: string
+): Promise<FeedVideo[] | null> {
+  // A playlist de uploads troca o prefixo UC por UU.
+  const playlistId = `UU${channelId.slice(2)}`;
+
+  const url = new URL(
+    "https://www.googleapis.com/youtube/v3/playlistItems"
+  );
+
+  url.searchParams.set("part", "snippet");
+  url.searchParams.set("playlistId", playlistId);
+  url.searchParams.set("maxResults", "50");
+  url.searchParams.set("key", apiKey);
+
+  const response = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    console.error(
+      "[YouTube API] HTTP",
+      response.status
+    );
+
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    items?: YouTubeItem[];
+  };
+
+  return (data.items ?? [])
+    .map((item) => ({
+      youtube_id:
+        item.snippet?.resourceId?.videoId ?? "",
+      title:
+        item.snippet?.title ?? "Vídeo da igreja",
+      published_at:
+        item.snippet?.publishedAt ?? "",
+    }))
+    .filter(
+      (video) =>
+        VIDEO_ID.test(video.youtube_id) &&
+        video.title !== "Private video" &&
+        video.title !== "Deleted video"
+    );
 }
 
 export const getChannelFeed = createServerFn({
@@ -53,10 +158,8 @@ export const getChannelFeed = createServerFn({
   .inputValidator((input: { channelId: string }) => {
     const channelId = input.channelId.trim();
 
-    if (!/^UC[\w-]{22}$/.test(channelId)) {
-      throw new Error(
-        "ID do canal inválido. Informe o ID iniciado por UC."
-      );
+    if (!CHANNEL_ID.test(channelId)) {
+      throw new Error("ID do canal inválido");
     }
 
     return { channelId };
@@ -64,97 +167,44 @@ export const getChannelFeed = createServerFn({
   .handler(
     async ({ data }): Promise<ChannelFeedResult> => {
       try {
-        const url = new URL(
-          "https://www.youtube.com/feeds/videos.xml"
-        );
+        // Chave usada apenas no servidor.
+        const apiKey =
+          process.env["YOUTUBE_API_KEY"]?.trim();
 
-        url.searchParams.set(
-          "channel_id",
+        // Primeiro tenta a API oficial.
+        if (apiKey) {
+          const videos = await fetchApi(
+            data.channelId,
+            apiKey
+          );
+
+          if (videos !== null) {
+            return {
+              videos,
+              unavailable: false,
+            };
+          }
+        }
+
+        // Se necessário, tenta o RSS.
+        const videos = await fetchRss(
           data.channelId
         );
 
-        const response = await fetch(url.toString(), {
-          headers: {
-            Accept:
-              "application/atom+xml, application/xml, text/xml",
-            "User-Agent": "Mozilla/5.0",
-          },
-          signal: AbortSignal.timeout(12000),
-        });
-
-        if (!response.ok) {
-          console.error(
-            "[YouTube RSS] Erro HTTP:",
-            response.status,
-            data.channelId
-          );
-
+        if (videos !== null) {
           return {
-            videos: [],
-            unavailable: true,
+            videos,
+            unavailable: false,
           };
         }
-
-        const xml = await response.text();
-
-        if (
-          !xml.includes("<feed") ||
-          !xml.includes("</feed>")
-        ) {
-          console.error(
-            "[YouTube RSS] Resposta XML inválida."
-          );
-
-          return {
-            videos: [],
-            unavailable: true,
-          };
-        }
-
-        const entries = xml
-          .split(/<entry(?:\s[^>]*)?>/)
-          .slice(1);
-
-        const videos: FeedVideo[] = entries
-          .map((entry) => {
-            const youtube_id = extractTag(
-              entry,
-              "yt:videoId"
-            );
-
-            const title = decodeXml(
-              extractTag(entry, "title")
-            );
-
-            const published_at = extractTag(
-              entry,
-              "published"
-            );
-
-            return {
-              youtube_id,
-              title: title || "Vídeo da igreja",
-              published_at:
-                published_at ||
-                new Date().toISOString(),
-            };
-          })
-          .filter((video) =>
-            /^[\w-]{11}$/.test(video.youtube_id)
-          );
-
-        console.info(
-          "[YouTube RSS] Vídeos encontrados:",
-          videos.length
-        );
 
         return {
-          videos,
-          unavailable: false,
+          videos: [],
+          unavailable: true,
         };
       } catch (error) {
         console.error(
-          "[YouTube RSS] Falha ao consultar canal:",
+          "[YouTube] Falha na consulta:",
           error
         );
 
