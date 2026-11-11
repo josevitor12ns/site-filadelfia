@@ -22,9 +22,9 @@ import { supabase } from "@/integrations/supabase/client";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
-// Logo oficial da Igreja Filadélfia da Paraíba.
-// O número da versão ajuda a renovar o cache do navegador.
-const CHURCH_LOGO = "/images/logo-filadelfia.jpg?v=5";
+// Versão dos ícones.
+// Ajuda os navegadores a buscar os arquivos atualizados.
+const ICON_VERSION = "7";
 
 // Página não encontrada
 function NotFoundComponent() {
@@ -132,8 +132,22 @@ export const Route = createRootRouteWithContext<{
         content: "website",
       },
       {
+        property: "og:site_name",
+        content: "Igreja Filadélfia da Paraíba",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://igrejafiladelfiadaparaiba.com.br/images/logo-filadelfia.jpg",
+      },
+      {
         name: "twitter:card",
         content: "summary_large_image",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://igrejafiladelfiadaparaiba.com.br/images/logo-filadelfia.jpg",
       },
       {
         name: "theme-color",
@@ -163,24 +177,34 @@ export const Route = createRootRouteWithContext<{
         href: appCss,
       },
 
-      // Logo na aba do navegador
+      // Favicon PNG para navegadores
       {
         rel: "icon",
-        type: "image/jpeg",
-        href: CHURCH_LOGO,
+        type: "image/png",
+        sizes: "32x32",
+        href: `/favicon.png?v=${ICON_VERSION}`,
       },
 
-      // Logo alternativa para navegadores
+      // Favicon maior para Android
+      {
+        rel: "icon",
+        type: "image/png",
+        sizes: "192x192",
+        href: `/favicon-192.png?v=${ICON_VERSION}`,
+      },
+
+      // Formato tradicional ICO
       {
         rel: "shortcut icon",
-        type: "image/jpeg",
-        href: CHURCH_LOGO,
+        type: "image/x-icon",
+        href: `/favicon.ico?v=${ICON_VERSION}`,
       },
 
-      // Logo para atalhos no iPhone e iPad
+      // Ícone para iPhone e iPad
       {
         rel: "apple-touch-icon",
-        href: CHURCH_LOGO,
+        sizes: "180x180",
+        href: `/apple-touch-icon.png?v=${ICON_VERSION}`,
       },
     ],
   }),
@@ -218,6 +242,7 @@ function RootShell({
 // Componente principal
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
   const router = useRouter();
 
   useEffect(() => {
