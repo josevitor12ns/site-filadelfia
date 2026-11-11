@@ -1,5 +1,9 @@
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+
 import {
   Outlet,
   Link,
@@ -9,24 +13,36 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+
 import { useEffect, type ReactNode } from "react";
+
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
+// Logo oficial da Igreja Filadélfia da Paraíba.
+// O número da versão ajuda a renovar o cache do navegador.
+const CHURCH_LOGO = "/images/logo-filadelfia.jpg?v=5";
+
+// Página não encontrada
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl text-foreground">404</h1>
+        <h1 className="text-7xl text-foreground">
+          404
+        </h1>
+
         <h2 className="mt-4 text-xl text-foreground">
           Página não encontrada
         </h2>
+
         <p className="mt-2 text-sm text-muted-foreground">
           A página que você procura não existe ou foi movida.
         </p>
+
         <div className="mt-6">
           <Link
             to="/"
@@ -40,7 +56,11 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: ErrorComponentProps) {
+// Página de erro
+function ErrorComponent({
+  error,
+  reset,
+}: ErrorComponentProps) {
   console.error(error);
 
   const router = useRouter();
@@ -64,6 +84,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
         <div className="mt-6 flex justify-center gap-2">
           <button
+            type="button"
             onClick={() => {
               router.invalidate();
               reset();
@@ -85,12 +106,15 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   );
 }
 
+// Configuração principal do site
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
   head: () => ({
     meta: [
-      { charSet: "utf-8" },
+      {
+        charSet: "utf-8",
+      },
       {
         name: "viewport",
         content: "width=device-width, initial-scale=1",
@@ -100,7 +124,8 @@ export const Route = createRootRouteWithContext<{
       },
       {
         name: "description",
-        content: "Site oficial da Igreja Filadélfia da Paraíba.",
+        content:
+          "Site oficial da Igreja Filadélfia da Paraíba.",
       },
       {
         property: "og:type",
@@ -110,9 +135,14 @@ export const Route = createRootRouteWithContext<{
         name: "twitter:card",
         content: "summary_large_image",
       },
+      {
+        name: "theme-color",
+        content: "#080808",
+      },
     ],
 
     links: [
+      // Fontes do site
       {
         rel: "preconnect",
         href: "https://fonts.googleapis.com",
@@ -126,25 +156,31 @@ export const Route = createRootRouteWithContext<{
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..500;1,9..144,300..500&family=Manrope:wght@400;500;600&display=swap",
       },
+
+      // Estilos do site
       {
         rel: "stylesheet",
         href: appCss,
       },
 
-      // Logo da igreja na aba do navegador
+      // Logo na aba do navegador
       {
         rel: "icon",
         type: "image/jpeg",
-        href: "/images/logo-filadelfia.jpg",
+        href: CHURCH_LOGO,
       },
+
+      // Logo alternativa para navegadores
       {
         rel: "shortcut icon",
         type: "image/jpeg",
-        href: "/images/logo-filadelfia.jpg",
+        href: CHURCH_LOGO,
       },
+
+      // Logo para atalhos no iPhone e iPad
       {
         rel: "apple-touch-icon",
-        href: "/images/logo-filadelfia.jpg",
+        href: CHURCH_LOGO,
       },
     ],
   }),
@@ -155,9 +191,18 @@ export const Route = createRootRouteWithContext<{
   errorComponent: ErrorComponent,
 });
 
-function RootShell({ children }: { children: ReactNode }) {
+// Estrutura HTML principal
+function RootShell({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
-    <html lang="pt-BR" translate="no" className="notranslate">
+    <html
+      lang="pt-BR"
+      translate="no"
+      className="notranslate"
+    >
       <head>
         <HeadContent />
       </head>
@@ -170,28 +215,32 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+// Componente principal
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event !== "SIGNED_IN" &&
-        event !== "SIGNED_OUT" &&
-        event !== "USER_UPDATED"
-      ) {
-        return;
-      }
+    const { data } =
+      supabase.auth.onAuthStateChange((event) => {
+        if (
+          event !== "SIGNED_IN" &&
+          event !== "SIGNED_OUT" &&
+          event !== "USER_UPDATED"
+        ) {
+          return;
+        }
 
-      router.invalidate();
+        router.invalidate();
 
-      if (event !== "SIGNED_OUT") {
-        queryClient.invalidateQueries();
-      }
-    });
+        if (event !== "SIGNED_OUT") {
+          queryClient.invalidateQueries();
+        }
+      });
 
-    return () => data.subscription.unsubscribe();
+    return () => {
+      data.subscription.unsubscribe();
+    };
   }, [router, queryClient]);
 
   return (
